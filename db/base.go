@@ -111,7 +111,7 @@ func intToBytes(num int64) []byte {
 	return buff.Bytes()
 }
 
-func (id ID) Bytes() Key {
+func (id ID) Bytes() []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, uint64(id))
 
@@ -122,6 +122,6 @@ func GetTimestamp() Timestamp {
 	return Timestamp(time.Now().UnixNano())
 }
 
-func (t Timestamp) Bytes() Key {
+func (t Timestamp) Bytes() []byte {
 	return intToBytes(int64(t))
 }

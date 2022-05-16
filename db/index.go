@@ -6,17 +6,16 @@ import (
 	// time "time"
 )
 
-type DFun func([]byte) error
-type IterFunc func(DFun) (bool, error)
-type Key []byte
-
-type IndexFun func(data []byte) ([]byte, []byte, error)
+type IterFn func(HandlerIterFn) (bool, error)
+type HandlerIterFn func([]byte) error
+type IndexFn func([]byte) ([]byte, []byte, error)
+type IndexWriterFn func([]byte, []byte) error
 
 type Index struct {
 	Root       string
 	BucketName string
 	Name       string
-	Fun        IndexFun
+	Fun        IndexFn
 	Parse      func([]byte) (Doc, error)
 }
 
@@ -35,13 +34,11 @@ func (index Index) Update() error {
 	return nil
 }
 
-type IndexFn func([]byte, []byte) error
-
-func (index Index) Writer(tx *bolt.Tx) (IndexFn, error) {
+func (index Index) Writer(tx *bolt.Tx) (IndexWriterFn, error) {
 	return indexWriter(tx, "indexes", index.Name)
 }
 
-func indexWriter(tx *bolt.Tx, root, indexName string) (IndexFn, error) {
+func indexWriter(tx *bolt.Tx, root, indexName string) (IndexWriterFn, error) {
 	broot, err := tx.CreateBucketIfNotExists([]byte(root))
 	if err != nil {
 		return nil, err
@@ -74,12 +71,12 @@ func indexWriter(tx *bolt.Tx, root, indexName string) (IndexFn, error) {
 	}, nil
 }
 
-func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFunc {
+func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFn {
 	b := tx.Bucket([]byte("updates"))
 	c := b.Bucket([]byte(index.BucketName)).Cursor()
-	bsource := tx.Bucket(Key(index.BucketName))
+	bsource := tx.Bucket([]byte(index.BucketName))
 
-	klast := Key("lastUpdate/" + index.BucketName)
+	klast := []byte("lastUpdate/" + index.BucketName)
 	lastUpdate := b.Get(klast)
 
 	var key, id []byte
@@ -89,7 +86,7 @@ func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFunc {
 		key, id = c.First()
 	}
 
-	return func(fun DFun) (bool, error) {
+	return func(fun HandlerIterFn) (bool, error) {
 		for i := 1; i != batchSize; i++ {
 			if key == nil {
 				return true, nil
