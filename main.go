@@ -8,7 +8,6 @@ import (
 	// "bytes"
 	// "encoding/binary"
 	"encoding/json"
-	"fmt"
 	// "strings"
 	// "gopkg.in/yaml.v2"
 	"log"
@@ -39,18 +38,9 @@ func (a Appointment) MarshalJson() ([]byte, error) {
 	return b, err
 }
 
-func main() {
-	log.SetOutput(os.Stdout)
-	byDate := func(data []byte) ([]byte, []byte, error) {
-		var a Appointment
-		err := json.Unmarshal(data, &a)
-		log.Printf("in byDate %s %s", a)
-
-		return []byte(a.Name), a.ID().Bytes(), err
-	}
-
-	collections := []string{"appointments", "users"}
-	indexes := []db.Index{
+var (
+	collections = []string{"appointments", "users"}
+	indexes     = []db.Index{
 		db.Index{
 			BucketName: "appointments",
 			Name:       "byDate",
@@ -58,8 +48,16 @@ func main() {
 			Unique:     false,
 		},
 	}
+	conf = db.Conf{
+		File:    "./malta.db",
+		Indexes: indexes,
+		Coll:    collections,
+	}
+)
 
-	conf := db.Conf{File: "./malta.db", Indexes: indexes, Coll: collections}
+func main() {
+	log.SetOutput(os.Stdout)
+
 	err := db.Open(conf)
 	defer db.Close()
 	if err != nil {
@@ -75,5 +73,12 @@ func main() {
 	}
 
 	db.Search("byDate", "aranavt", "aranavt")
-	fmt.Printf("log: %s\n", err)
+}
+
+func byDate(data []byte) ([]byte, []byte, error) {
+	var a Appointment
+	err := json.Unmarshal(data, &a)
+	log.Printf("in byDate %s %s", a)
+
+	return []byte(a.Name), a.ID().Bytes(), err
 }
