@@ -49,14 +49,21 @@ func main() {
 		return []byte(a.Name), a.ID().Bytes(), err
 	}
 
-	db.AddIndex(
-		db.Index{BucketName: "appointments", Name: "byDate", Fun: byDate},
-	)
+	collections := []string{"appointments", "users"}
+	indexes := []db.Index{
+		db.Index{
+			BucketName: "appointments",
+			Name:       "byDate",
+			Fun:        byDate,
+			Unique:     false,
+		},
+	}
 
-	err := db.Open("./malta.db")
+	conf := db.Conf{File: "./malta.db", Indexes: indexes, Coll: collections}
+	err := db.Open(conf)
 	defer db.Close()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Couldn't init db, ", err)
 	}
 
 	a := Appointment{Id: db.GenId(), Name: "aranavt", CreatedAt: t.Now()}

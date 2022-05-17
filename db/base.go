@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	db      *bolt.DB
-	indexes = make(map[string]Index)
+	db             *bolt.DB
+	indexes        map[string]Index
+	updatesIndexes map[string]Index
 )
 
 type ID uint64
@@ -33,11 +34,43 @@ type Doc interface {
 	MarshalJson() ([]byte, error)
 }
 
-func Open(filePath string) error {
-	var err error
-	db, err = bolt.Open(filePath, 0600, nil)
+type Conf struct {
+	File    string
+	Indexes []Index
+	Coll    []string
+}
 
-	return err
+func Open(conf Conf) error {
+	var err error
+	db, err = bolt.Open(conf.File, 0600, nil)
+	if err != nil {
+		return err
+	}
+
+	updatesColl := mapCollections(conf.Coll)
+	indexesColl := indexSetRoot(conf.Indexes, "indexes")
+
+	err = initIndexes(append(indexesColl, updatesColl...))
+	if err != nil {
+		return err
+	}
+
+	updatesIndexes = mapByName(updatesColl)
+	indexes = mapByName(indexesColl)
+
+	return nil
+}
+
+func initIndexes(coll []Index) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		for _, idx := range coll {
+			if err := idx.init(tx); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func Close() {
@@ -46,12 +79,6 @@ func Close() {
 
 func DB() *bolt.DB {
 	return db
-}
-
-func AddIndex(idxs ...Index) {
-	for _, idx := range idxs {
-		indexes[idx.Name] = idx
-	}
 }
 
 func Save(doc Doc) error {
@@ -88,12 +115,29 @@ func Search(indexName, start, end string) {
 	index.Update()
 }
 
+func mapCollections(coll []string) []Index {
+	var indexes []Index
+	for _, name := range coll {
+		idx := Index{
+			root:       "updates",
+			BucketName: name,
+			Name:       name,
+			Unique:     true,
+		}
+
+		indexes = append(indexes, idx)
+	}
+
+	return indexes
+}
+
 func bytesToId(b []byte) ID {
 	return ID(binary.LittleEndian.Uint64(b))
 }
 
 func logUpdates(tx *bolt.Tx, doc Doc) error {
-	windex, err := indexWriter(tx, "updates", doc.BucketName())
+	index := updatesIndexes[doc.BucketName()]
+	windex, err := indexWriter(tx, index)
 	if err != nil {
 		return err
 	}
@@ -124,4 +168,23 @@ func GetTimestamp() Timestamp {
 
 func (t Timestamp) Bytes() []byte {
 	return intToBytes(int64(t))
+}
+
+func mapByName(coll []Index) map[string]Index {
+	m := make(map[string]Index)
+	for _, idx := range coll {
+		m[idx.Name] = idx
+	}
+
+	return m
+}
+
+func indexSetRoot(coll []Index, root string) []Index {
+	var arr []Index
+	for _, idx := range coll {
+		idx.root = root
+		arr = append(arr, idx)
+	}
+
+	return arr
 }

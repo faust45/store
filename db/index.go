@@ -4,6 +4,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"log"
 	// time "time"
+	"encoding/binary"
+	"math/rand"
 )
 
 type IterFn func(HandlerIterFn) (bool, error)
@@ -12,11 +14,11 @@ type IndexFn func([]byte) ([]byte, []byte, error)
 type IndexWriterFn func([]byte, []byte) error
 
 type Index struct {
-	Root       string
+	root       string
 	BucketName string
 	Name       string
 	Fun        IndexFn
-	Parse      func([]byte) (Doc, error)
+	Unique     bool
 }
 
 func (index Index) Update() error {
@@ -34,32 +36,24 @@ func (index Index) Update() error {
 	return nil
 }
 
-func (index Index) Writer(tx *bolt.Tx) (IndexWriterFn, error) {
-	return indexWriter(tx, "indexes", index.Name)
-}
-
-func indexWriter(tx *bolt.Tx, root, indexName string) (IndexWriterFn, error) {
-	broot, err := tx.CreateBucketIfNotExists([]byte(root))
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := broot.CreateBucketIfNotExists([]byte(indexName))
-	if err != nil {
-		return nil, err
-	}
-
-	rbucketName := []byte("reverse/" + indexName)
-	rb, err := broot.CreateBucketIfNotExists(rbucketName)
-	if err != nil {
-		return nil, err
-	}
+func indexWriter(tx *bolt.Tx, index Index) (IndexWriterFn, error) {
+	log.Printf("%+v", index)
+	rbucketName := []byte("reverse/" + index.Name)
+	broot := tx.Bucket([]byte(index.root))
+	b := broot.Bucket([]byte(index.Name))
+	rb := broot.Bucket(rbucketName)
 
 	return func(key, docId []byte) error {
 		oldKey := rb.Get(docId)
 		err := b.Delete(oldKey)
 		if err != nil {
 			return err
+		}
+
+		if !index.Unique {
+			postfix := make([]byte, 2)
+			binary.BigEndian.PutUint16(postfix, uint16(rand.Int()))
+			key = append(key, postfix...)
 		}
 
 		err = b.Put(key, docId)
@@ -69,6 +63,26 @@ func indexWriter(tx *bolt.Tx, root, indexName string) (IndexWriterFn, error) {
 
 		return rb.Put(docId, key)
 	}, nil
+}
+
+func (index Index) init(tx *bolt.Tx) error {
+	broot, err := tx.CreateBucketIfNotExists([]byte(index.root))
+	if err != nil {
+		return err
+	}
+
+	_, err = broot.CreateBucketIfNotExists([]byte(index.Name))
+	if err != nil {
+		return err
+	}
+
+	rbucketName := []byte("reverse/" + index.Name)
+	_, err = broot.CreateBucketIfNotExists(rbucketName)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFn {
@@ -114,7 +128,7 @@ func (index Index) batchUpdate(tx *bolt.Tx, batchSize int) (bool, error) {
 	var key, value []byte
 	var err error
 
-	windex, err := index.Writer(tx)
+	windex, err := indexWriter(tx, index)
 	iter := index.recentUpdatesIter(tx, batchSize)
 
 	return iter(func(data []byte) error {
@@ -128,6 +142,6 @@ func (index Index) batchUpdate(tx *bolt.Tx, batchSize int) (bool, error) {
 			return windex(key, value)
 		}
 
-		return nil
+		return windex(nil, value)
 	})
 }
