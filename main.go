@@ -45,7 +45,6 @@ var (
 			BucketName: "appointments",
 			Name:       "byDate",
 			Fun:        byDate,
-			Unique:     false,
 		},
 	}
 	conf = db.Conf{
@@ -75,10 +74,20 @@ func main() {
 	db.Search("byDate", "aranavt", "aranavt")
 }
 
-func byDate(data []byte) ([]byte, []byte, error) {
+func byDate(data []byte) ([]byte, error) {
 	var a Appointment
-	err := json.Unmarshal(data, &a)
-	log.Printf("in byDate %s %s", a)
+	log.Printf("in byDate %s", a)
 
-	return []byte(a.Name), a.ID().Bytes(), err
+	err := json.Unmarshal(data, &a)
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(a.Name), nil
 }
+
+// if !index.Unique {
+// 		postfix := make([]byte, 2)
+// 		binary.BigEndian.PutUint16(postfix, uint16(rand.Int()))
+// 		key = append(key, postfix...)
+// 	}

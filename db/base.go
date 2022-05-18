@@ -122,7 +122,6 @@ func mapCollections(coll []string) []Index {
 			root:       "updates",
 			BucketName: name,
 			Name:       name,
-			Unique:     true,
 		}
 
 		indexes = append(indexes, idx)
@@ -137,10 +136,7 @@ func bytesToId(b []byte) ID {
 
 func logUpdates(tx *bolt.Tx, doc Doc) error {
 	index := updatesIndexes[doc.BucketName()]
-	windex, err := indexWriter(tx, index)
-	if err != nil {
-		return err
-	}
+	windex, _ := indexWriter(tx, index)
 
 	k, v := GenId().Bytes(), doc.ID().Bytes()
 	return windex(k, v)

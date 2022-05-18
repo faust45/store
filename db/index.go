@@ -4,21 +4,21 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"log"
 	// time "time"
-	"encoding/binary"
-	"math/rand"
+	// "encoding/binary"
+	// "math/rand"
 )
 
 type IterFn func(HandlerIterFn) (bool, error)
-type HandlerIterFn func([]byte) error
-type IndexFn func([]byte) ([]byte, []byte, error)
+type HandlerIterFn func([]byte, []byte) error
+type IndexFn func([]byte) ([]byte, error)
 type IndexWriterFn func([]byte, []byte) error
+type IndexCleanerFn func([]byte) error
 
 type Index struct {
 	root       string
 	BucketName string
 	Name       string
 	Fun        IndexFn
-	Unique     bool
 }
 
 func (index Index) Update() error {
@@ -36,24 +36,29 @@ func (index Index) Update() error {
 	return nil
 }
 
-func indexWriter(tx *bolt.Tx, index Index) (IndexWriterFn, error) {
-	log.Printf("%+v", index)
+func indexWriter(tx *bolt.Tx, index Index) (IndexWriterFn, IndexCleanerFn) {
 	rbucketName := []byte("reverse/" + index.Name)
 	broot := tx.Bucket([]byte(index.root))
 	b := broot.Bucket([]byte(index.Name))
 	rb := broot.Bucket(rbucketName)
 
-	return func(key, docId []byte) error {
+	cleaner := func(docId []byte) error {
 		oldKey := rb.Get(docId)
 		err := b.Delete(oldKey)
 		if err != nil {
 			return err
 		}
 
-		if !index.Unique {
-			postfix := make([]byte, 2)
-			binary.BigEndian.PutUint16(postfix, uint16(rand.Int()))
-			key = append(key, postfix...)
+		return rb.Delete(docId)
+	}
+
+	writer := func(key, docId []byte) error {
+		key = append(key, docId...)
+
+		oldKey := rb.Get(docId)
+		err := b.Delete(oldKey)
+		if err != nil {
+			return err
 		}
 
 		err = b.Put(key, docId)
@@ -62,7 +67,9 @@ func indexWriter(tx *bolt.Tx, index Index) (IndexWriterFn, error) {
 		}
 
 		return rb.Put(docId, key)
-	}, nil
+	}
+
+	return writer, cleaner
 }
 
 func (index Index) init(tx *bolt.Tx) error {
@@ -95,7 +102,8 @@ func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFn {
 
 	var key, id []byte
 	if lastUpdate != nil {
-		key, id = c.Seek(lastUpdate)
+		c.Seek(lastUpdate)
+		key, id = c.Next()
 	} else {
 		key, id = c.First()
 	}
@@ -107,7 +115,7 @@ func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFn {
 			}
 
 			data := bsource.Get(id)
-			err := fun(data)
+			err := fun(id, data)
 			if err != nil {
 				return false, err
 			}
@@ -125,23 +133,24 @@ func (index Index) recentUpdatesIter(tx *bolt.Tx, batchSize int) IterFn {
 }
 
 func (index Index) batchUpdate(tx *bolt.Tx, batchSize int) (bool, error) {
-	var key, value []byte
+	var key []byte
 	var err error
 
-	windex, err := indexWriter(tx, index)
+	windex, cindex := indexWriter(tx, index)
 	iter := index.recentUpdatesIter(tx, batchSize)
 
-	return iter(func(data []byte) error {
+	return iter(func(id, data []byte) error {
 		if data != nil {
-			key, value, err = index.Fun(data)
+			key, err = index.Fun(data)
 			if err != nil {
 				log.Printf("Err index Fun %s %s", err, data)
 				return err
 			}
 
-			return windex(key, value)
+			return windex(key, id)
 		}
 
-		return windex(nil, value)
+		//in case doc deleted
+		return cindex(id)
 	})
 }
