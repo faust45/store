@@ -7,10 +7,9 @@ import (
 	// "strings"
 	// "bytes"
 	"encoding/binary"
-	// "encoding/json"
+	"encoding/json"
 	// "strings"
 	// "gopkg.in/yaml.v2"
-	"bytes"
 	bolt "go.etcd.io/bbolt"
 	"log"
 	time "time"
@@ -27,6 +26,31 @@ var (
 
 type ID uint64
 type Timestamp int64
+
+type Order int
+
+type Num int
+
+const (
+	Desc Order = iota + 1
+	Asc
+)
+
+type Query struct {
+	Index string
+	Key   []byte
+	Order Order
+	Limit int
+}
+
+type QueryRange struct {
+	Index string
+	Scope []byte
+	Start []byte
+	End   []byte
+	Order Order
+	Limit int
+}
 
 type Doc interface {
 	BucketName() string
@@ -98,7 +122,7 @@ func Save(doc Doc) error {
 		key := doc.ID().Bytes()
 		err = b.Put(key, data)
 		if err != nil {
-			log.Printf("db.Save: Put data %s\n %s %s", err, doc.ID(), data)
+			// log.Printf("db.Save: Put data %s\n %s %s", err, doc.ID(), data)
 			return err
 		}
 
@@ -110,28 +134,30 @@ func GenId() ID {
 	return ID(time.Now().UnixNano())
 }
 
-func Search(indexName, start, end string) {
-	index := indexes[indexName]
+func Search[T Doc](q QueryRange) []T {
+	var docs []T
+
+	index := indexes[q.Index]
 	index.Update()
-}
 
-func mapCollections(coll []string) []Index {
-	var indexes []Index
-	for _, name := range coll {
-		idx := Index{
-			root:       "updates",
-			BucketName: name,
-			Name:       name,
-		}
+	db.View(func(tx *bolt.Tx) error {
+		rindex := indexReader(tx, index, q)
+		bsource := tx.Bucket([]byte(index.Source))
 
-		indexes = append(indexes, idx)
-	}
+		rindex(func(key []byte) error {
+			var doc T
 
-	return indexes
-}
+			bytes := bsource.Get(key)
+			json.Unmarshal(bytes, &doc)
 
-func bytesToId(b []byte) ID {
-	return ID(binary.LittleEndian.Uint64(b))
+			docs = append(docs, doc)
+			return nil
+		})
+
+		return nil
+	})
+
+	return docs
 }
 
 func logUpdates(tx *bolt.Tx, doc Doc) error {
@@ -139,40 +165,7 @@ func logUpdates(tx *bolt.Tx, doc Doc) error {
 	windex, _ := indexWriter(tx, index)
 
 	k, v := GenId().Bytes(), doc.ID().Bytes()
-	return windex(k, v)
-}
-
-func intToBytes(num int64) []byte {
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, binary.BigEndian, num)
-	if err != nil {
-	}
-
-	return buff.Bytes()
-}
-
-func (id ID) Bytes() []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(id))
-
-	return b
-}
-
-func GetTimestamp() Timestamp {
-	return Timestamp(time.Now().UnixNano())
-}
-
-func (t Timestamp) Bytes() []byte {
-	return intToBytes(int64(t))
-}
-
-func mapByName(coll []Index) map[string]Index {
-	m := make(map[string]Index)
-	for _, idx := range coll {
-		m[idx.Name] = idx
-	}
-
-	return m
+	return windex([][]byte{k}, v)
 }
 
 func indexSetRoot(coll []Index, root string) []Index {
@@ -183,4 +176,28 @@ func indexSetRoot(coll []Index, root string) []Index {
 	}
 
 	return arr
+}
+
+func (a Num) Bytes() []byte {
+	return IntToBytes(int(a))
+}
+
+func (id ID) Bytes() []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(id))
+
+	return b
+}
+
+func (t Timestamp) Bytes() []byte {
+	return Int64ToBytes(int64(t))
+}
+
+func Bytes(arr ...Field) []byte {
+	var acc []byte
+	for _, v := range arr {
+		acc = append(acc, v.Bytes()...)
+	}
+
+	return acc
 }

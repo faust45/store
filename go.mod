@@ -1,6 +1,8 @@
 module store
 
-go 1.17
+go 1.18
+
+require github.com/faust45/pasco v0.0.0-20220523151258-5743b215c0f0
 
 require (
 	github.com/boltdb/bolt v1.3.1 // indirect

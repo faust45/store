@@ -14,6 +14,8 @@ github.com/elazarl/go-bindata-assetfs v1.0.1 h1:m0kkaHRKEu7tUIUFVwhGGGYClXvyl4RE
 github.com/elazarl/go-bindata-assetfs v1.0.1/go.mod h1:v+YaWX3bdea5J/mo8dSETolEo7R71Vk1u8bnjau5yw4=
 github.com/evnix/boltdbweb v0.0.0-20191029203843-5b16e6623bd9 h1:dC7Oop5DzcTumNzd05DmaeRKFTbnmoFcMI0mDTq9YOQ=
 github.com/evnix/boltdbweb v0.0.0-20191029203843-5b16e6623bd9/go.mod h1:bgR50h2xH9mkOK8usjyWvaOtA2hUAHDTXSc72t2lvT8=
+github.com/faust45/pasco v0.0.0-20220523151258-5743b215c0f0 h1:3KNrAPfv2JC0xTpvrBWbkQsqKos4daIX51UFdME0skY=
+github.com/faust45/pasco v0.0.0-20220523151258-5743b215c0f0/go.mod h1:EwEREUeVYC1YXq0+9umPELTrZwlmTD6W9CeQJbA8Ni8=
 github.com/gin-contrib/sse v0.1.0 h1:Y/yl/+YNO8GZSjAhjMsSuLt29uWRFHdHYUb5lYOV9qE=
 github.com/gin-contrib/sse v0.1.0/go.mod h1:RHrZQHXnP2xjPF+u1gW/2HnVO7nvIa9PG3Gm+fLHvGI=
 github.com/gin-gonic/gin v1.7.7 h1:3DoBmSbJbZAWqXJC3SLjAPfutPJJRN1U5pALB7EeTTs=
