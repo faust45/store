@@ -53,24 +53,26 @@ func indexReader(tx *bolt.Tx, index Index, q QueryRange) IndexIterFn {
 	bindex := broot.Bucket([]byte(index.Name))
 	c := bindex.Cursor()
 
-	if q.Order == Asc {
+	if bytes.Compare(q.Start, q.End) == -1 {
 		return iterAsc(q, c)
 	} else {
 		return iterDesc(q, c)
 	}
+
+	// if q.Order == Asc {
+	// 	return iterAsc(q, c)
+	// } else {
+	// 	return iterDesc(q, c)
+	// }
 }
 
 func iterAsc(q QueryRange, c *bolt.Cursor) IndexIterFn {
 	return func(fn DataIterFn) error {
 		var k, v []byte
 		k, v = c.Seek([]byte(q.Start))
-		log.Printf("desc seek %d", BytesToInt(k))
 
 		if k == nil {
-			k, v = c.First()
-			for k != nil && 1 == bytes.Compare(k, q.Start) || 0 == bytes.Compare(k, q.Start) {
-				k, v = c.Next()
-			}
+			return nil
 		}
 
 		for (k != nil && -1 == bytes.Compare(k, q.End)) || 0 == bytes.Compare(k, q.End) {
@@ -87,18 +89,14 @@ func iterAsc(q QueryRange, c *bolt.Cursor) IndexIterFn {
 func iterDesc(q QueryRange, c *bolt.Cursor) IndexIterFn {
 	return func(fn DataIterFn) error {
 		var k, v []byte
+		log.Println("in desc")
 
-		k, v = c.Seek([]byte(q.End))
+		k, v = c.Seek([]byte(q.Start))
 		if k == nil {
 			k, v = c.Last()
-			// log.Printf("desc %d %d", BytesToInt(k), bytes.Compare(k, q.End))
-			for k != nil && 1 == bytes.Compare(k, q.End) || 0 == bytes.Compare(k, q.Start) {
-				// log.Printf("for desc %d", k)
-				k, v = c.Prev()
-			}
 		}
 
-		for k != nil && 1 == bytes.Compare(k, q.Start) || 0 == bytes.Compare(k, q.Start) {
+		for k != nil && 1 == bytes.Compare(k, q.End) || 0 == bytes.Compare(k, q.End) {
 			fn(v)
 			k, v = c.Prev()
 		}

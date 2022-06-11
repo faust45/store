@@ -15,7 +15,6 @@ import (
 	// db "github.com/faust45/pasco"
 	t "time"
 
-	"math"
 	"os"
 )
 
@@ -109,8 +108,8 @@ func main() {
 	q := db.QueryRange{
 		Index: "byAge",
 		Scope: []byte("rstrst"),
-		Start: db.IntToBytes(43),
-		End:   db.IntToBytes(math.MaxInt32),
+		Start: db.IntToBytes(49),
+		End:   db.IntToBytes(21),
 	}
 
 	docs := db.Search[Appointment](q)
@@ -127,6 +126,6 @@ func byAge(data []byte) ([][]byte, error) {
 	}
 
 	return [][]byte{
-		db.Bytes(a.SalonId, a.Age),
+		a.Age.Bytes(),
 	}, nil
 }
