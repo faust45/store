@@ -107,7 +107,6 @@ func main() {
 	// where SalonId == x and Age > 18
 	q := db.QueryRange{
 		Index: "byAge",
-		Scope: []byte("rstrst"),
 		Start: db.IntToBytes(49),
 		End:   db.IntToBytes(21),
 	}
